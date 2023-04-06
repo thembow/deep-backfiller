@@ -1,0 +1,58 @@
+ppo()
+1. create placeholders 
+    x_ph, a_ph = placeholder symbols for state, action
+    mask_ph = placeholder of MAX_QUEUE_SIZE?
+    adv_ph, ret_ph, logp_old_ph = placeholders, outputs from computation graph?
+2. run actor critic and generate values
+    pi, logp, logp_pi, v, out = policy, log prob, log prob of policy, value, idk what this is
+3. generate ratio of new vs old policy
+4. generate loss for policy and value
+5. generate clipped ratio + approx_kl for later stuff
+**CONTINUED AFTER UPDATE**
+update()
+1. run tf session
+2. average kl scalar over mpi processes (need to look into this more)
+3. if kl too big, stop early
+4. log changes
+**ppo continues**
+6. run training for epochs
+    6a. each step returns observation, reward, done, info
+
+
+pi = policy
+logp = log probability of doing a_ph in state x_ph
+logp_pi = log probability of action sampled by pi
+    
+attention network - enhances some input while diminishing others,
+network learns to "pay attention'
+*if categorical_policy has attn set, it outputs using attention,
+otherwise uses rl_kernel
+
+categorical_policy
+*produces pi, logp_pi, ??out
+
+critic_mlp
+*produces value prediction
+
+why is actor critic only used once in the initial function call?
+shouldnt it be used repeatedly?
+
+
+step only returns rewards when trajectory is done
+rwd2 = (best_total - rl_total)
+best_total = min(self.scheduled_scores)
+rl_total = sum(self.scheduled_rl.values())
+rwd2 = min(self.scheduled_scores) - sum(self_scheduled_rl.values())
+rwd = -rl_total
+???why 2 different rewards
+
+rwd2 used for logging.
+
+where is advantage calculated?
+@ min_adv, used to create pi loss
+
+
+
+
+
+

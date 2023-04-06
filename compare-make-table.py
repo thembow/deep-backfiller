@@ -44,17 +44,20 @@ def load_policy(model_path, itr='last'):
 
 
 def action_from_obs(o):
+    """return first job with lowest normalized_wait_time, effectively SJF"""
+    #observation = (job,normalized_wait_time, normalized_run_time, normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now)
+    #observation doesnt include job number, starts at normalized_wait_time
     lst = []
     for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
-        if o[i] == 0 and o[i + 1] == 1 and o[i + 2] == 1 and o[i + 3] == 0:
-            pass
-        elif o[i] == 1 and o[i + 1] == 1 and o[i + 2] == 1 and o[i + 3] == 1:
-            pass
-        else:
-            lst.append((o[i + 1], math.floor(i / JOB_FEATURES)))
+        """The feature vector we recieve (documented above) is a list of features for each job = JOB_FEATURES, so we step through the list to check each job"""
+        lst.append((o[i + 1], math.floor(i / JOB_FEATURES)))
+        #append normalized wait time, job number
     min_time = min([i[0] for i in lst])
+    #get lowest job wait time
     result = [i[1] for i in lst if i[0] == min_time]
+    #get list of jobs with the lowest wait time
     return result[0]
+    #return first job with lowest wait time
 
 
 # @profile
@@ -72,6 +75,7 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
     # time_total = 0
     # num_total = 0
     for iter_num in range(0, iters):
+        print("debug! current iter =", iter_num)
         start = iter_num * args.len
         env.reset_for_test(nums, start)
         f1_r.append(sum(env.schedule_curr_sequence_reset(env.f1_score).values()))
@@ -106,18 +110,19 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
             softmax_out = tf.nn.softmax(out)
             confidence = tf.reduce_max(softmax_out)
             total_decisions += 1.0
-            if confidence > 0:
-                # start_time = time.time()
-                pi = get_probs(o, np.array(lst))
-                # pi = tf.arg_max(softmax_out, dimension=1)
-                # time_total += time.time() - start_time
-                # num_total += 1
-                # print(start_time, time_total, num_total)
-                a = pi[0]
-                rl_decisions += 1.0
-            else:
+            # if confidence > 0:
+            #     #TODO: now that we know how it generates actions, we can figure out how to modify this to only pick jobs by SJF!
+            #     # start_time = time.time()
+            #     pi = get_probs(o, np.array(lst))
+            #     # pi = tf.arg_max(softmax_out, dimension=1)
+            #     # time_total += time.time() - start_time
+            #     # num_total += 1
+            #     # print(start_time, time_total, num_total)
+            #     a = pi[0]
+            #     rl_decisions += 1.0
+            # else:
                 # print('SJF')
-                a = action_from_obs(o)
+            a = action_from_obs(o)
             # print(out)
             # v_t = get_value(o)
 
@@ -145,7 +150,7 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
     all_means = []
     for p in all_data:
         all_means.append(np.mean(p))
-    print(*all_means)
+    print(*all_means, sep=', ')
 
 
 
@@ -154,16 +159,16 @@ if __name__ == '__main__':
     import time
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--rlmodel', type=str, default="./trained_models/sdsc_sp2/sdsc_sp2_s4")
-    parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')
-    parser.add_argument('--len', '-l', type=int, default=10)
+    parser.add_argument('--rlmodel', type=str, default="./trained_models/bsld/sdsc_sp2/sdsc_sp2_s4")
+    parser.add_argument('--workload', type=str, default='./data/SDSC-SP2-1998-4.2-cln.swf')
+    parser.add_argument('--len', '-l', type=int, default=1024)
     parser.add_argument('--seed', '-s', type=int, default=1)
     parser.add_argument('--iter', '-i', type=int, default=10)
     parser.add_argument('--shuffle', type=int, default=0)
-    parser.add_argument('--backfil', type=int, default=0)
+    parser.add_argument('--backfil', type=int, default=1)
     parser.add_argument('--skip', type=int, default=0)
     parser.add_argument('--score_type', type=int, default=0)
-    parser.add_argument('--batch_job_slice', type=int, default=0)
+    parser.add_argument('--batch_job_slice', type=int, default=10000)
 
     args = parser.parse_args()
 

@@ -114,55 +114,55 @@ class HPCEnv(gym.Env):
         self.cluster = Cluster("Cluster", self.loads.max_nodes, self.loads.max_procs/self.loads.max_nodes)
         self.penalty_job_score = JOB_SEQUENCE_SIZE * self.loads.max_exec_time / 10
 
-        # if self.build_sjf: #this is for trajectory filtering.
-        #     #calculate SJF scores for all sample sequence and save them here
-        #     index = 0
-        #     if self.batch_job_slice == 0:
-        #         max_index = self.loads.size() - JOB_SEQUENCE_SIZE - 1
-        #     else:
-        #         max_index = min(self.batch_job_slice, self.loads.size()) - JOB_SEQUENCE_SIZE - 1
-        #     print("max index... initializing SJF Score Array", max_index)
+        if self.build_sjf: #this is for trajectory filtering.
+            #calculate SJF scores for all sample sequence and save them here
+            index = 0
+            if self.batch_job_slice == 0:
+                max_index = self.loads.size() - JOB_SEQUENCE_SIZE - 1
+            else:
+                max_index = min(self.batch_job_slice, self.loads.size()) - JOB_SEQUENCE_SIZE - 1
+            print("max index... initializing SJF Score Array", max_index)
 
-        #     while index <= max_index:
-        #         index += 1
-        #         if index % 100 == 0:
-        #             print("index", index)
+            while index <= max_index:
+                index += 1
+                if index % 100 == 0:
+                    print("index", index)
 
-        #         self.cluster.reset()
-        #         self.loads.reset()
+                self.cluster.reset()
+                self.loads.reset()
 
-        #         self.job_queue = []
-        #         self.running_jobs = []
-        #         self.visible_jobs = []
-        #         self.pairs = []
+                self.job_queue = []
+                self.running_jobs = []
+                self.visible_jobs = []
+                self.pairs = []
 
-        #         self.current_timestamp = 0
-        #         self.start = 0
-        #         self.next_arriving_job_idx = 0
-        #         self.last_job_in_batch = 0
-        #         self.num_job_in_batch = 0
-        #         self.scheduled_rl = {}
-        #         self.penalty = 0
-        #         self.pivot_job = False
-        #         self.scheduled_scores = []
+                self.current_timestamp = 0
+                self.start = 0
+                self.next_arriving_job_idx = 0
+                self.last_job_in_batch = 0
+                self.num_job_in_batch = 0
+                self.scheduled_rl = {}
+                self.penalty = 0
+                self.pivot_job = False
+                self.scheduled_scores = []
 
-        #         job_sequence_size = JOB_SEQUENCE_SIZE
-        #         self.pre_workloads = []
+                job_sequence_size = JOB_SEQUENCE_SIZE
+                self.pre_workloads = []
 
-        #         self.start = index;
-        #         self.start_idx_last_reset = self.start
-        #         self.num_job_in_batch = job_sequence_size
-        #         self.last_job_in_batch = self.start + self.num_job_in_batch
-        #         self.current_timestamp = self.loads[self.start].submit_time
-        #         self.job_queue.append(self.loads[self.start])
-        #         self.next_arriving_job_idx = self.start + 1
+                self.start = index;
+                self.start_idx_last_reset = self.start
+                self.num_job_in_batch = job_sequence_size
+                self.last_job_in_batch = self.start + self.num_job_in_batch
+                self.current_timestamp = self.loads[self.start].submit_time
+                self.job_queue.append(self.loads[self.start])
+                self.next_arriving_job_idx = self.start + 1
 
-        #         if self.enable_preworkloads:
-        #             self.gen_preworkloads(job_sequence_size + self.np_random.randint(job_sequence_size))
+                if self.enable_preworkloads:
+                    self.gen_preworkloads(job_sequence_size + self.np_random.randint(job_sequence_size))
 
-        #         self.sjf_scores.append(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))
+                self.sjf_scores.append(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))
 
-        #     #print(self.sjf_scores)
+            #print(self.sjf_scores)
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -232,7 +232,7 @@ class HPCEnv(gym.Env):
         return submit_time
 
     def gen_preworkloads(self, size):
-        """ Generate some running jobs to randomly fill the cluster."""
+        # Generate some running jobs to randomly fill the cluster.
         # size = self.np_random.randint(2 * job_sequence_size)
         running_job_size = size
         for i in range(running_job_size):
@@ -280,6 +280,7 @@ class HPCEnv(gym.Env):
         job_sequence_size = JOB_SEQUENCE_SIZE
 
         self.pre_workloads = []
+        
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
 
         if self.build_sjf:
@@ -472,7 +473,6 @@ class HPCEnv(gym.Env):
                     self.skip_for_resources_greedy(job_for_scheduling, scheduled_logs)
             
             assert job_for_scheduling.scheduled_time == -1  # this job should never be scheduled before.
-            #make sure job hasnt been already scheduled
             job_for_scheduling.scheduled_time = self.current_timestamp
             job_for_scheduling.allocated_machines = self.cluster.allocate(job_for_scheduling.job_id,
                                                                         job_for_scheduling.request_number_of_processors)
@@ -674,7 +674,6 @@ class HPCEnv(gym.Env):
                     can_schedule_now = 1.0 - 1e-5
                 else:
                     can_schedule_now = 1e-5
-
                 self.pairs.append([job,normalized_wait_time, normalized_run_time, normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now])
 
             elif self.skip and not add_skip:  # the next job is skip
@@ -688,10 +687,6 @@ class HPCEnv(gym.Env):
 
         for i in range(0, MAX_QUEUE_SIZE):
             vector[i*JOB_FEATURES:(i+1)*JOB_FEATURES] = self.pairs[i][1:]
-            #ex: vector[0*8:1*8] = vector[0:8]
-            #vector[:8]
-
-            #seems like we are inputting each job into the vector list from 1->end, implying the job number isnt included
 
         return vector
 
@@ -705,9 +700,8 @@ class HPCEnv(gym.Env):
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
         for running_job in self.running_jobs:
-            #add count of allocated procs to free_proc count
             free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
-            earliest_start_time = (running_job.scheduled_time + running_job.request_time) #maybe we need to modify this?
+            earliest_start_time = (running_job.scheduled_time + running_job.request_time)
             if free_processors >= job.request_number_of_processors:
                 break
 
@@ -718,7 +712,7 @@ class HPCEnv(gym.Env):
             for _j in job_queue_iter_copy:
                 if self.cluster.can_allocated(_j) and (self.current_timestamp + _j.request_time) < earliest_start_time:
                     # we should be OK to schedule the job now
-                    assert _j.scheduled_time == -1  # this job should never have been scheduled before.
+                    assert _j.scheduled_time == -1  # this job should never be scheduled before.
                     _j.scheduled_time = self.current_timestamp
                     _j.allocated_machines = self.cluster.allocate(_j.job_id, _j.request_number_of_processors)
                     self.running_jobs.append(_j)
@@ -889,11 +883,9 @@ class HPCEnv(gym.Env):
     def valid(self, a):
         action = a[0]
         return self.pairs[action][0]
-    #self.pairs is a list of jobs and index 0 is the job value, so doing self.pairs[action][0] gives us the job at that place 
 
     #@profile
     def step(self, a):
-        #observation, reward, done, etc
         job_for_scheduling = self.pairs[a][0]
         if not job_for_scheduling:
             done, _ = self.skip_schedule()
@@ -921,7 +913,6 @@ class HPCEnv(gym.Env):
                 rwd = 1    
             '''
             return [None, rwd, True, rwd2, sjf, f1]
-        #episode is done, returns the rewards and scores
     
     def step_for_test(self, a):
         job_for_scheduling = self.pairs[a][0]
@@ -940,8 +931,6 @@ class HPCEnv(gym.Env):
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
             return [None, rl_total, True, None]
-        
-        #o, r, d, _
 
 if __name__ == '__main__':
     import argparse

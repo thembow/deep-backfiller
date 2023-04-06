@@ -1,6 +1,7 @@
 import re
 import sys
 import math
+import random
 
 
 class Job:
@@ -50,7 +51,8 @@ class Job:
         self.request_time = int(s_array[8])
         if self.request_time == -1:
             self.request_time = self.run_time
-
+        error = .05
+        #self.request_time = self.run_time #* (1 + random.uniform(0, error))
         # if we use the run time as the most accurate request time
         # self.request_time = self.run_time + 60
         # if we gradually increase the accuracy of job's request time

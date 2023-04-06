@@ -94,6 +94,7 @@ def attention(x, act_dim):
     return x
 
 def lenet(x_ph, act_dim):
+    #CNN network?why is this here
     m = int(np.sqrt(MAX_QUEUE_SIZE))
     x = tf.reshape(x_ph, shape=[-1, m, m, JOB_FEATURES])
     x = tf.layers.conv2d(inputs=x, filters=32, kernel_size=[1, 1], strides=1)
@@ -248,6 +249,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
     env = HPCEnv(shuffle=shuffle, backfil=backfil, skip=skip, job_score_type=score_type, batch_job_slice=batch_job_slice, build_sjf=False)
     env.seed(seed)
     env.my_init(workload_file=workload_file, sched_file=model_path)
+    #setup and initialize environment, need to figure out what this does
     
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape
@@ -259,6 +261,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
     # Inputs to computation graph
 
     buf = PPOBuffer(obs_dim, act_dim, traj_per_epoch * JOB_SEQUENCE_SIZE, gamma, lam)
+    #buffer stores trajectories
 
     if pre_trained:
         sess = tf.Session()
@@ -267,20 +270,24 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         # Count variables
         var_counts = tuple(count_vars(scope) for scope in ['pi', 'v'])
         logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n' % var_counts)
-
         x_ph = model['x']
         a_ph = model['a']
+        #placeholder symbols for state, used with actor
         mask_ph = model['mask']
         adv_ph = model['adv']
         ret_ph = model['ret']
         logp_old_ph = model['logp_old_ph']
 
         pi = model['pi']
+        # Samples actions from policy given states.
         v = model['v']
+        #Gives the value estimate for states in x_ph. (Critical: make sure to flatten this!)
         # logits = model['logits']
         out = model['out']
         logp = model['logp']
+        #log probability, according to the policy, of taking actions a_ph in states x_ph
         logp_pi = model['logp_pi']
+        #Gives log probability, according to the policy, of the action sampled by pi.
         pi_loss = model['pi_loss']
         v_loss = model['v_loss']
         approx_ent = model['approx_ent']
@@ -304,6 +311,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         # sess.run(tf.variables_initializer(train_v_optimizer.variables()))
         # Need all placeholders in *this* order later (to zip with data from buffer)
         all_phs = [x_ph, a_ph, mask_ph, adv_ph, ret_ph, logp_old_ph]
+        #ph = placeholder?
         # Every step, get: action, value, and logprob
         get_action_ops = [pi, v, logp_pi, out]
 
@@ -312,7 +320,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         # y_ph = placeholder(JOB_SEQUENCE_SIZE*3) # 3 is the number of sequence features
         mask_ph = placeholder(MAX_QUEUE_SIZE)
         adv_ph, ret_ph, logp_old_ph = placeholders(None, None, None)
-
+        #so i think ph = placeholder?
         # Main outputs from computation graph
         pi, logp, logp_pi, v, out = actor_critic(x_ph, a_ph, mask_ph, **ac_kwargs)
 
@@ -330,6 +338,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
 
         # PPO objectives
         ratio = tf.exp(logp - logp_old_ph)  # pi(a|s) / pi_old(a|s)
+        #ratio of current policy vs old policy
         min_adv = tf.where(adv_ph > 0, (1 + clip_ratio) * adv_ph, (1 - clip_ratio) * adv_ph)
         pi_loss = -tf.reduce_mean(tf.minimum(ratio * adv_ph, min_adv))
         v_loss = tf.reduce_mean((ret_ph - v) ** 2)
@@ -377,6 +386,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
 
     start_time = time.time()
     [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0,0,0,0
+    #returns observation, reward
 
     # Main loop: collect experience in env and update/log each epoch
     start_time = time.time()
@@ -392,9 +402,11 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
                     lst.append(0)
                 else:
                     lst.append(1)
+            #pad list of jobs with zeros
+            #mask tells it if it can be scheduled or not
 
             a, v_t, logp_t, output = sess.run(get_action_ops, feed_dict={x_ph: o.reshape(1,-1), mask_ph: np.array(lst).reshape(1,-1)})
-            # print(a, end=" ")
+            print(a[0], end=" ")
 
             num_total += 1
             '''
@@ -407,6 +419,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
             logger.store(VVals=v_t)
 
             o, r, d, r2, sjf_t, f1_t = env.step(a[0])
+            #env step returns observation, reward, done, info
             ep_ret += r
             ep_len += 1
             show_ret += r2
@@ -487,6 +500,7 @@ if __name__ == '__main__':
         logger_kwargs=logger_kwargs, pre_trained=1,trained_model=os.path.join(model_file,"simple_save"),attn=args.attn,
             shuffle=args.shuffle, backfil=args.backfil, skip=args.skip, score_type=args.score_type,
             batch_job_slice=args.batch_job_slice)
+        #ppo seems important
     else:
         ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=0, attn=args.attn,shuffle=args.shuffle, backfil=args.backfil,

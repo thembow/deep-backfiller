@@ -406,7 +406,6 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
             #mask tells it if it can be scheduled or not
 
             a, v_t, logp_t, output = sess.run(get_action_ops, feed_dict={x_ph: o.reshape(1,-1), mask_ph: np.array(lst).reshape(1,-1)})
-            print(a[0], end=" ")
 
             num_total += 1
             '''

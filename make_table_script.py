@@ -11,8 +11,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.score_type == "bsld":
         dire = "trained_models/bsld/"
-        workloads = ["data/SDSC-SP2-1998-4.2-cln.swf", "data/HPC2N-2002-2.2-cln.swf"]
-        models = ["sdsc_sp2", "hpc2n"]
+        workloads = ["data/SDSC-SP2-1998-4.2-cln.swf"]
+        #, "data/HPC2N-2002-2.2-cln.swf"
+        models = ["sdsc_sp2"]
+        #, "hpc2n"
         score_type = 0
         seed = 1
     elif args.score_type == "utilization":

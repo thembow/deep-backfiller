@@ -49,6 +49,8 @@ import logging
 logging.getLogger('tensorflow').disabled = True
 
 from HPCSimPickJobs import *
+tf.enable_eager_execution()
+
 
 
 MAX_QUEUE_SIZE = 128

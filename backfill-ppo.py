@@ -712,6 +712,8 @@ class HPCEnv(gym.Env):
                 else:
                     can_schedule_now = 1e-5
 
+                #adding request time to job features
+
                 self.pairs.append([job,normalized_wait_time, normalized_run_time, normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now])
 
             elif self.skip and not add_skip:  # the next job is skip
@@ -729,7 +731,6 @@ class HPCEnv(gym.Env):
             #vector[:8]
 
             #seems like we are inputting each job into the vector list from 1->end, implying the job number isnt included
-
         return vector
 
     #@profile
@@ -753,7 +754,8 @@ class HPCEnv(gym.Env):
             self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             job_queue_iter_copy = list(self.job_queue)
             for _j in job_queue_iter_copy:
-                if self.cluster.can_allocated(_j) and (self.current_timestamp + _j.request_time) < earliest_start_time:
+                if self.cluster.can_allocated(_j) and (self.current_timestamp + model.train_one_step(np.matrix(env.build_observation()), _j.run_time)) < earliest_start_time:
+                    #_j.request_time
                     # we should be OK to schedule the job now
                     assert _j.scheduled_time == -1  # this job should never have been scheduled before.
                     _j.scheduled_time = self.current_timestamp
@@ -1127,7 +1129,29 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
         all_means.append(np.mean(p))
     print(*all_means, sep=', ')
 
+class rlModel:
+    def __init__(self, input_size, output_size):
+        self.input_size = input_size
+        self.output_size = output_size
+        self.model = self.build_model()
+        self.optimizer = tf.keras.optimizers.Adam()
 
+    def build_model(self):
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.Dense(256, activation='relu', input_shape=(self.input_size,)),
+            tf.keras.layers.Dense(512, activation='relu'),
+            tf.keras.layers.Dense(self.output_size, activation='linear')
+        ])
+        return model
+
+    def train_one_step(self, X, y_true):
+        with tf.GradientTape() as tape:
+            y_pred = self.model(X)
+            print(f"true = {y_true}, prediction = {y_pred}, data-type = {type(y_pred)}")
+            loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
+        return y_pred.numpy()[0]
 
 if __name__ == '__main__':
     import argparse
@@ -1158,6 +1182,9 @@ if __name__ == '__main__':
                  batch_job_slice=args.batch_job_slice, build_sjf=False)
     env.my_init(workload_file=workload_file)
     env.seed(args.seed)
+
+    #initialize environment
+    model = rlModel(input_size=1024, output_size=510209)
 
     start = time.time()
     print("debug! policy starting!")

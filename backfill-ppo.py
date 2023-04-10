@@ -1151,7 +1151,7 @@ class rlModel:
             loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
-        return y_pred.numpy()[0]
+        return y_pred.numpy().item(0)
 
 if __name__ == '__main__':
     import argparse

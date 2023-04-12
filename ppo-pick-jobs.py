@@ -137,7 +137,7 @@ def actor_critic(x, a, mask, action_space=None, attn=False):
         v = tf.squeeze(critic_mlp(x, 1), axis=1)
     return pi, logp, logp_pi, v, out
 
-class PPOBuffer:
+class   PPOBuffer:
     """
     A buffer for storing trajectories experienced by a PPO agent interacting
     with the environment, and using Generalized Advantage Estimation (GAE-Lambda)

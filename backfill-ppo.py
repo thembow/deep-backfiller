@@ -1140,15 +1140,18 @@ class rlModel:
         model = tf.keras.models.Sequential([
             tf.keras.layers.Dense(256, activation='relu', input_shape=(self.input_size,)),
             tf.keras.layers.Dense(512, activation='relu'),
-            tf.keras.layers.Dense(self.output_size, activation='linear')
+            tf.keras.layers.Dense(1, activation='linear')
+            #self.output_size
         ])
         return model
 
     def train_one_step(self, X, y_true):
         with tf.GradientTape() as tape:
             y_pred = self.model(X)
-            print(f"true = {y_true}, prediction = {y_pred}, data-type = {type(y_pred)}")
-            loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
+            mae = tf.keras.losses.MeanAbsoluteError()
+            loss = mae(y_true, y_pred)
+            print(f"true = {y_true}, prediction = {y_pred}, loss = {abs(y_pred - y_true)}")
+            logLoss.append(loss.numpy())
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return y_pred.numpy().item(0)
@@ -1157,12 +1160,14 @@ if __name__ == '__main__':
     import argparse
     import time
 
+    logLoss = []
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--rlmodel', type=str, default="./trained_models/bsld/sdsc_sp2/sdsc_sp2_s4")
     parser.add_argument('--workload', type=str, default='./data/SDSC-SP2-1998-4.2-cln.swf')
     parser.add_argument('--len', '-l', type=int, default=1024)
     parser.add_argument('--seed', '-s', type=int, default=1)
-    parser.add_argument('--iter', '-i', type=int, default=10)
+    parser.add_argument('--iter', '-i', type=int, default=5)
     parser.add_argument('--shuffle', type=int, default=0)
     parser.add_argument('--backfil', type=int, default=1)
     parser.add_argument('--skip', type=int, default=0)
@@ -1190,3 +1195,14 @@ if __name__ == '__main__':
     print("debug! policy starting!")
     run_policy(env, get_probs, get_value, args.len, args.iter, args.score_type)
     print("elapse: {}".format(time.time() - start))
+    
+    import pandas as pd
+    df = pd.DataFrame (logLoss, columns = ['loss'])
+    df.to_csv('lossLog.csv')
+    #logCSV(logLoss)
+
+    """TODO: Implement bsld trajectory learning
+    1. Change train_one_step() to predict_log()
+        a. The model will output its current prediction
+        b. The model will log the bsld score from the self.job_score(_j) function along with the 
+    """

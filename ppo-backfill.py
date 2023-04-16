@@ -137,7 +137,7 @@ def actor_critic(x, a, mask, action_space=None, attn=False):
         v = tf.squeeze(critic_mlp(x, 1), axis=1)
     return pi, logp, logp_pi, v, out
 
-class PPOBuffer:
+class   PPOBuffer:
     """
     A buffer for storing trajectories experienced by a PPO agent interacting
     with the environment, and using Generalized Advantage Estimation (GAE-Lambda)
@@ -234,134 +234,133 @@ Proximal Policy Optimization (by clipping),
 with early stopping based on approximate KL
 
 """
-class PPO:
-    def __init__(self, workload_file, model_path, ac_kwargs=dict(), seed=0, 
-            traj_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
-            vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
-            target_kl=0.01, logger_kwargs=dict(), save_freq=10,pre_trained=0,trained_model=None,attn=False,shuffle=False,
-            backfil=False, skip=False, score_type=0, batch_job_slice=0):
+def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0, 
+        traj_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
+        vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
+        target_kl=0.01, logger_kwargs=dict(), save_freq=10,pre_trained=0,trained_model=None,attn=False,shuffle=False,
+        backfil=False, skip=False, score_type=0, batch_job_slice=0):
 
-        logger = EpochLogger(**logger_kwargs)
-        logger.save_config(locals())
+    logger = EpochLogger(**logger_kwargs)
+    logger.save_config(locals())
 
-        tf.set_random_seed(seed)
-        np.random.seed(seed)
+    tf.set_random_seed(seed)
+    np.random.seed(seed)
 
-        env = HPCEnv(shuffle=shuffle, backfil=backfil, skip=skip, job_score_type=score_type, batch_job_slice=batch_job_slice, build_sjf=False)
-        env.seed(seed)
-        env.my_init(workload_file=workload_file, sched_file=model_path)
-        #setup and initialize environment
-        
-        obs_dim = env.observation_space.shape
-        act_dim = env.action_space.shape
-        
-        # Share information about action space with policy architecture
-        ac_kwargs['action_space'] = env.action_space
-        ac_kwargs['attn'] = attn
+    env = HPCEnv(shuffle=shuffle, backfil=backfil, skip=skip, job_score_type=score_type, batch_job_slice=batch_job_slice, build_sjf=False)
+    env.seed(seed)
+    env.my_init(workload_file=workload_file, sched_file=model_path)
+    #setup and initialize environment, need to figure out what this does
+    
+    obs_dim = env.observation_space.shape
+    act_dim = env.action_space.shape
+    
+    # Share information about action space with policy architecture
+    ac_kwargs['action_space'] = env.action_space
+    ac_kwargs['attn'] = attn
 
-        # Inputs to computation graph
+    # Inputs to computation graph
 
-        buf = PPOBuffer(obs_dim, act_dim, traj_per_epoch * JOB_SEQUENCE_SIZE, gamma, lam)
-        #buffer stores trajectories
+    buf = PPOBuffer(obs_dim, act_dim, traj_per_epoch * JOB_SEQUENCE_SIZE, gamma, lam)
+    #buffer stores trajectories
 
-        if pre_trained:
-            sess = tf.Session()
-            model = restore_tf_graph(sess, trained_model)
-            logger.log('load pre-trained model')
-            # Count variables
-            var_counts = tuple(count_vars(scope) for scope in ['pi', 'v'])
-            logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n' % var_counts)
-            x_ph = model['x']
-            a_ph = model['a']
-            #placeholder symbols for state, used with actor
-            mask_ph = model['mask']
-            adv_ph = model['adv']
-            ret_ph = model['ret']
-            logp_old_ph = model['logp_old_ph']
+    if pre_trained:
+        sess = tf.Session()
+        model = restore_tf_graph(sess, trained_model)
+        logger.log('load pre-trained model')
+        # Count variables
+        var_counts = tuple(count_vars(scope) for scope in ['pi', 'v'])
+        logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n' % var_counts)
+        x_ph = model['x']
+        a_ph = model['a']
+        #placeholder symbols for state, used with actor
+        mask_ph = model['mask']
+        adv_ph = model['adv']
+        ret_ph = model['ret']
+        logp_old_ph = model['logp_old_ph']
 
-            pi = model['pi']
-            # Samples actions from policy given states.
-            v = model['v']
-            #Gives the value estimate for states in x_ph. (Critical: make sure to flatten this!)
-            # logits = model['logits']
-            out = model['out']
-            logp = model['logp']
-            #log probability, according to the policy, of taking actions a_ph in states x_ph
-            logp_pi = model['logp_pi']
-            #Gives log probability, according to the policy, of the action sampled by pi.
-            pi_loss = model['pi_loss']
-            v_loss = model['v_loss']
-            approx_ent = model['approx_ent']
-            approx_kl = model['approx_kl']
-            clipfrac = model['clipfrac']
-            clipped = model['clipped']
+        pi = model['pi']
+        # Samples actions from policy given states.
+        v = model['v']
+        #Gives the value estimate for states in x_ph. (Critical: make sure to flatten this!)
+        # logits = model['logits']
+        out = model['out']
+        logp = model['logp']
+        #log probability, according to the policy, of taking actions a_ph in states x_ph
+        logp_pi = model['logp_pi']
+        #Gives log probability, according to the policy, of the action sampled by pi.
+        pi_loss = model['pi_loss']
+        v_loss = model['v_loss']
+        approx_ent = model['approx_ent']
+        approx_kl = model['approx_kl']
+        clipfrac = model['clipfrac']
+        clipped = model['clipped']
 
-            # Optimizers
-            #graph = tf.get_default_graph()
-            #op = sess.graph.get_operations()
-            #[print(m.values()) for m in op]
-            #train_pi = graph.get_tensor_by_name('pi/conv2d/kernel/Adam:0')
-            #train_v = graph.get_tensor_by_name('v/conv2d/kernel/Adam:0')
-            train_pi = tf.get_collection("train_pi")[0]
-            train_v = tf.get_collection("train_v")[0]
-            # train_pi_optimizer = MpiAdamOptimizer(learning_rate=pi_lr, name='AdamLoad')
-            # train_pi = train_pi_optimizer.minimize(pi_loss)
-            # train_v_optimizer = MpiAdamOptimizer(learning_rate=vf_lr, name='AdamLoad')
-            # train_v = train_v_optimizer.minimize(v_loss)
-            # sess.run(tf.variables_initializer(train_pi_optimizer.variables()))
-            # sess.run(tf.variables_initializer(train_v_optimizer.variables()))
-            # Need all placeholders in *this* order later (to zip with data from buffer)
-            all_phs = [x_ph, a_ph, mask_ph, adv_ph, ret_ph, logp_old_ph]
-            #ph = placeholder?
-            # Every step, get: action, value, and logprob
-            get_action_ops = [pi, v, logp_pi, out]
+        # Optimizers
+        #graph = tf.get_default_graph()
+        #op = sess.graph.get_operations()
+        #[print(m.values()) for m in op]
+        #train_pi = graph.get_tensor_by_name('pi/conv2d/kernel/Adam:0')
+        #train_v = graph.get_tensor_by_name('v/conv2d/kernel/Adam:0')
+        train_pi = tf.get_collection("train_pi")[0]
+        train_v = tf.get_collection("train_v")[0]
+        # train_pi_optimizer = MpiAdamOptimizer(learning_rate=pi_lr, name='AdamLoad')
+        # train_pi = train_pi_optimizer.minimize(pi_loss)
+        # train_v_optimizer = MpiAdamOptimizer(learning_rate=vf_lr, name='AdamLoad')
+        # train_v = train_v_optimizer.minimize(v_loss)
+        # sess.run(tf.variables_initializer(train_pi_optimizer.variables()))
+        # sess.run(tf.variables_initializer(train_v_optimizer.variables()))
+        # Need all placeholders in *this* order later (to zip with data from buffer)
+        all_phs = [x_ph, a_ph, mask_ph, adv_ph, ret_ph, logp_old_ph]
+        #ph = placeholder?
+        # Every step, get: action, value, and logprob
+        get_action_ops = [pi, v, logp_pi, out]
 
-        else:
-            x_ph, a_ph = placeholders_from_spaces(env.observation_space, env.action_space)
-            # y_ph = placeholder(JOB_SEQUENCE_SIZE*3) # 3 is the number of sequence features
-            mask_ph = placeholder(MAX_QUEUE_SIZE)
-            adv_ph, ret_ph, logp_old_ph = placeholders(None, None, None)
-            #so i think ph = placeholder?
-            # Main outputs from computation graph
-            pi, logp, logp_pi, v, out = actor_critic(x_ph, a_ph, mask_ph, **ac_kwargs)
+    else:
+        x_ph, a_ph = placeholders_from_spaces(env.observation_space, env.action_space)
+        # y_ph = placeholder(JOB_SEQUENCE_SIZE*3) # 3 is the number of sequence features
+        mask_ph = placeholder(MAX_QUEUE_SIZE)
+        adv_ph, ret_ph, logp_old_ph = placeholders(None, None, None)
+        #so i think ph = placeholder?
+        # Main outputs from computation graph
+        pi, logp, logp_pi, v, out = actor_critic(x_ph, a_ph, mask_ph, **ac_kwargs)
 
-            # Need all placeholders in *this* order later (to zip with data from buffer)
-            all_phs = [x_ph, a_ph, mask_ph, adv_ph, ret_ph, logp_old_ph]
+        # Need all placeholders in *this* order later (to zip with data from buffer)
+        all_phs = [x_ph, a_ph, mask_ph, adv_ph, ret_ph, logp_old_ph]
 
-            # Every step, get: action, value, and logprob
-            get_action_ops = [pi, v, logp_pi, out]
+        # Every step, get: action, value, and logprob
+        get_action_ops = [pi, v, logp_pi, out]
 
-            # Experience buffer
+        # Experience buffer
 
-            # Count variables
-            var_counts = tuple(count_vars(scope) for scope in ['pi', 'v'])
-            logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n' % var_counts)
+        # Count variables
+        var_counts = tuple(count_vars(scope) for scope in ['pi', 'v'])
+        logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n' % var_counts)
 
-            # PPO objectives
-            ratio = tf.exp(logp - logp_old_ph)  # pi(a|s) / pi_old(a|s)
-            #ratio of current policy vs old policy
-            min_adv = tf.where(adv_ph > 0, (1 + clip_ratio) * adv_ph, (1 - clip_ratio) * adv_ph)
-            pi_loss = -tf.reduce_mean(tf.minimum(ratio * adv_ph, min_adv))
-            v_loss = tf.reduce_mean((ret_ph - v) ** 2)
+        # PPO objectives
+        ratio = tf.exp(logp - logp_old_ph)  # pi(a|s) / pi_old(a|s)
+        #ratio of current policy vs old policy
+        min_adv = tf.where(adv_ph > 0, (1 + clip_ratio) * adv_ph, (1 - clip_ratio) * adv_ph)
+        pi_loss = -tf.reduce_mean(tf.minimum(ratio * adv_ph, min_adv))
+        v_loss = tf.reduce_mean((ret_ph - v) ** 2)
 
-            # Info (useful to watch during learning)
-            approx_kl = tf.reduce_mean(logp_old_ph - logp)  # a sample estimate for KL-divergence, easy to compute
-            approx_ent = tf.reduce_mean(-logp)  # a sample estimate for entropy, also easy to compute
-            clipped = tf.logical_or(ratio > (1 + clip_ratio), ratio < (1 - clip_ratio))
-            clipfrac = tf.reduce_mean(tf.cast(clipped, tf.float32))
+        # Info (useful to watch during learning)
+        approx_kl = tf.reduce_mean(logp_old_ph - logp)  # a sample estimate for KL-divergence, easy to compute
+        approx_ent = tf.reduce_mean(-logp)  # a sample estimate for entropy, also easy to compute
+        clipped = tf.logical_or(ratio > (1 + clip_ratio), ratio < (1 - clip_ratio))
+        clipfrac = tf.reduce_mean(tf.cast(clipped, tf.float32))
 
-            # Optimizers
-            train_pi = tf.train.AdamOptimizer(learning_rate=pi_lr).minimize(pi_loss)
-            train_v = tf.train.AdamOptimizer(learning_rate=vf_lr).minimize(v_loss)
-            sess = tf.Session()
-            sess.run(tf.global_variables_initializer())
-            tf.add_to_collection("train_pi", train_pi)
-            tf.add_to_collection("train_v", train_v)
+        # Optimizers
+        train_pi = tf.train.AdamOptimizer(learning_rate=pi_lr).minimize(pi_loss)
+        train_v = tf.train.AdamOptimizer(learning_rate=vf_lr).minimize(v_loss)
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+        tf.add_to_collection("train_pi", train_pi)
+        tf.add_to_collection("train_v", train_v)
 
 
-        # Setup model saving
-        # logger.setup_tf_saver(sess, inputs={'x': x_ph}, outputs={'action_probs': action_probs, 'log_picked_action_prob': log_picked_action_prob, 'v': v})
-        logger.setup_tf_saver(sess, inputs={'x': x_ph, 'a':a_ph, 'adv':adv_ph, 'mask':mask_ph, 'ret':ret_ph, 'logp_old_ph':logp_old_ph}, outputs={'pi': pi, 'v': v, 'out':out, 'pi_loss':pi_loss, 'logp': logp, 'logp_pi':logp_pi, 'v_loss':v_loss, 'approx_ent':approx_ent, 'approx_kl':approx_kl, 'clipped':clipped, 'clipfrac':clipfrac})
+    # Setup model saving
+    # logger.setup_tf_saver(sess, inputs={'x': x_ph}, outputs={'action_probs': action_probs, 'log_picked_action_prob': log_picked_action_prob, 'v': v})
+    logger.setup_tf_saver(sess, inputs={'x': x_ph, 'a':a_ph, 'adv':adv_ph, 'mask':mask_ph, 'ret':ret_ph, 'logp_old_ph':logp_old_ph}, outputs={'pi': pi, 'v': v, 'out':out, 'pi_loss':pi_loss, 'logp': logp, 'logp_pi':logp_pi, 'v_loss':v_loss, 'approx_ent':approx_ent, 'approx_kl':approx_kl, 'clipped':clipped, 'clipfrac':clipfrac})
 
     def update():
         inputs = {k:v for k,v in zip(all_phs, buf.get())}
@@ -389,78 +388,82 @@ class PPO:
     [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0,0,0,0
     #returns observation, reward
 
-    def returnAction():   # Main loop: collect experience in env and update/log each epoch
-        for epoch in range(epochs):
-            t = 0
-            while True:
-                lst = []
-                for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
-                    if all(o[i:i+JOB_FEATURES] == [0]+[1]*(JOB_FEATURES-2)+[0]):
-                        lst.append(0)
-                    elif all(o[i:i+JOB_FEATURES] == [1]*JOB_FEATURES):
-                        lst.append(0)
-                    else:
-                        lst.append(1)
-                #pad list of jobs with zeros
-                #mask tells it if it can be scheduled or not
+    # Main loop: collect experience in env and update/log each epoch
+    start_time = time.time()
+    num_total = 0
+    for epoch in range(epochs):
+        t = 0
+        while True:
+            lst = []
+            for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
+                if all(o[i:i+JOB_FEATURES] == [0]+[1]*(JOB_FEATURES-2)+[0]):
+                    lst.append(0)
+                elif all(o[i:i+JOB_FEATURES] == [1]*JOB_FEATURES):
+                    lst.append(0)
+                else:
+                    lst.append(1)
+            #pad list of jobs with zeros
+            #mask tells it if it can be scheduled or not
+            #eventually modify this to mask out relative job
 
-                a, v_t, logp_t, output = sess.run(get_action_ops, feed_dict={x_ph: o.reshape(1,-1), mask_ph: np.array(lst).reshape(1,-1)})
+            a, v_t, logp_t, output = sess.run(get_action_ops, feed_dict={x_ph: o.reshape(1,-1), mask_ph: np.array(lst).reshape(1,-1)})
 
-                num_total += 1
-                '''
-                action = np.random.choice(np.arange(MAX_QUEUE_SIZE), p=action_probs)
-                log_action_prob = np.log(action_probs[action])
-                '''
+            num_total += 1
+            '''
+            action = np.random.choice(np.arange(MAX_QUEUE_SIZE), p=action_probs)
+            log_action_prob = np.log(action_probs[action])
+            '''
 
-                # save and log
-                buf.store(o,None,  a, np.array(lst), r, v_t, logp_t)
-                logger.store(VVals=v_t)
+            # save and log
+            buf.store(o,None,  a, np.array(lst), r, v_t, logp_t)
+            logger.store(VVals=v_t)
 
-                o, r, d, r2, sjf_t, f1_t = env.step(a[0])
-                #env step returns observation, reward, done, info
-                ep_ret += r
-                ep_len += 1
-                show_ret += r2
-                sjf += sjf_t
-                f1 += f1_t
+            o, r, d, r2, sjf_t, f1_t = env.step(a[0])
+            #modify step function to run and only return when a job must be backfilled
+            #env step returns observation, reward, done, info
+            ep_ret += r
+            ep_len += 1
+            show_ret += r2
+            sjf += sjf_t
+            f1 += f1_t
 
-                if d:
-                    t += 1
-                    buf.finish_path(r)
-                    logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, SJF=sjf, F1=f1)
-                    [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
-                    if t >= traj_per_epoch:
-                        # print ("state:", state, "\nlast action in a traj: action_probs:\n", action_probs, "\naction:", action)
-                        break
-            # print("Sample time:", (time.time()-start_time)/num_total, num_total)
-            # Save model
-            if (epoch % save_freq == 0) or (epoch == epochs-1):
-                logger.save_state({'env': env}, None)
+            if d:
+                t += 1
+                buf.finish_path(r)
+                logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, SJF=sjf, F1=f1)
+                [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
+                if t >= traj_per_epoch:
+                    # print ("state:", state, "\nlast action in a traj: action_probs:\n", action_probs, "\naction:", action)
+                    break
+        # print("Sample time:", (time.time()-start_time)/num_total, num_total)
+        # Save model
+        if (epoch % save_freq == 0) or (epoch == epochs-1):
+            logger.save_state({'env': env}, None)
 
-            # Perform PPO update!
-            # start_time = time.time()
-            update()
-            # print("Train time:", time.time()-start_time)
+        # Perform PPO update!
+        # start_time = time.time()
+        update()
+        # print("Train time:", time.time()-start_time)
 
-            # Log info about epoch
-            logger.log_tabular('Epoch', epoch)
-            logger.log_tabular('EpRet', with_min_and_max=True)
-            logger.log_tabular('EpLen', with_min_and_max=True)
-            logger.log_tabular('VVals', with_min_and_max=True)
-            logger.log_tabular('TotalEnvInteracts', (epoch+1)* traj_per_epoch * JOB_SEQUENCE_SIZE)
-            logger.log_tabular('LossPi', average_only=True)
-            logger.log_tabular('LossV', average_only=True)
-            logger.log_tabular('DeltaLossPi', average_only=True)
-            logger.log_tabular('DeltaLossV', average_only=True)
-            logger.log_tabular('Entropy', average_only=True)
-            logger.log_tabular('KL', average_only=True)
-            logger.log_tabular('ClipFrac', average_only=True)
-            logger.log_tabular('StopIter', average_only=True)
-            logger.log_tabular('ShowRet', average_only=True)
-            logger.log_tabular('SJF', average_only=True)
-            logger.log_tabular('F1', average_only=True)
-            logger.log_tabular('Time', time.time()-start_time)
-            logger.dump_tabular()
+        # Log info about epoch
+        logger.log_tabular('Epoch', epoch)
+        logger.log_tabular('EpRet', with_min_and_max=True)
+        logger.log_tabular('EpLen', with_min_and_max=True)
+        logger.log_tabular('VVals', with_min_and_max=True)
+        logger.log_tabular('TotalEnvInteracts', (epoch+1)* traj_per_epoch * JOB_SEQUENCE_SIZE)
+        logger.log_tabular('LossPi', average_only=True)
+        logger.log_tabular('LossV', average_only=True)
+        logger.log_tabular('DeltaLossPi', average_only=True)
+        logger.log_tabular('DeltaLossV', average_only=True)
+        logger.log_tabular('Entropy', average_only=True)
+        logger.log_tabular('KL', average_only=True)
+        logger.log_tabular('ClipFrac', average_only=True)
+        logger.log_tabular('StopIter', average_only=True)
+        logger.log_tabular('ShowRet', average_only=True)
+        logger.log_tabular('SJF', average_only=True)
+        logger.log_tabular('F1', average_only=True)
+        logger.log_tabular('Time', time.time()-start_time)
+        logger.dump_tabular()
 
 if __name__ == '__main__':
     import argparse
@@ -503,34 +506,3 @@ if __name__ == '__main__':
         ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=0, attn=args.attn,shuffle=args.shuffle, backfil=args.backfil,
             skip=args.skip, score_type=args.score_type, batch_job_slice=args.batch_job_slice)
-
-
-
-
-
-        """The plan
-        relative job = job we are backfilling based on AKA we are backfilling until this job can run
-        job queue = jobs that need to run
-        1. backfill-gym simulates the normal job scheduling and running until there is a backfilling opportunity 
-        2. backfill-gym provides the current observation as state to PPO.
-        3. PPO picks a job in the waiting queue to backfill.
-        4. The job is sent to backfill-gym. 
-        5. backfill-gym backfills the job, if the backfilling opportunity still exists, it provides the current observation to PPO.
-        6. go back to 3 until there is no backfilling opportunity.
-        7. go back to 1.
-
-
-        *ppo should be defined in a class we can instantiate and call
-        *function backfillJob() should return jobs to backfill until the rjob can be allocated
-        *when epoch ends, call update() so ppo can improve
-
-
-        Things to ask Di:
-        1. Am i understanding the lst[] loop section in the main loop correctly?
-        2. Doesn't seem like i need to modify idx stuff in backfill code, so i can leave that alone?
-        3. Is the relative job in the job queue or not?
-        4. am i understanding the free_proc loop correctly?
-        5. if the relative job isn't removed from the job queue, how do we prevent it from backfilling itself?
-            (I am aware the loop is dependent on the rjob not being allocated)
-        6. Should we update() after every backfill loop ends or only after each epoch
-        """

@@ -1,3 +1,22 @@
+# from job import Job, Workloads
+# from cluster import Cluster
+
+# import os
+# import math
+# import json
+# import time
+# import sys
+# import random
+# from random import shuffle
+
+# import numpy as np
+# import tensorflow as tf
+# import scipy.signal
+
+# import gym
+# from gym import spaces
+# from gym.spaces import Box, Discrete
+# from gym.utils import seeding
 from job import Job, Workloads
 from cluster import Cluster
 
@@ -17,6 +36,22 @@ import gym
 from gym import spaces
 from gym.spaces import Box, Discrete
 from gym.utils import seeding
+
+import joblib
+import os.path as osp
+from spinup import EpochLogger
+from spinup.utils.logx import restore_tf_graph
+from tensorflow.python.util import deprecation
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import logging
+logging.getLogger('tensorflow').disabled = True
+
+from HPCSimPickJobs import *
+tf.enable_eager_execution()
+
+
 
 MAX_QUEUE_SIZE = 128
 MLP_SIZE = 256
@@ -77,8 +112,6 @@ class HPCEnv(gym.Env):
         self.running_jobs = []
         self.visible_jobs = []
         self.pairs = []
-        self.first_step = True
-        self.backfilling = False
 
         self.current_timestamp = 0
         self.start = 0
@@ -268,8 +301,6 @@ class HPCEnv(gym.Env):
         self.running_jobs = []
         self.visible_jobs = []
         self.pairs = []
-        self.first_step = True
-        self.backfilling = False
 
         self.current_timestamp = 0
         self.start = 0
@@ -284,6 +315,7 @@ class HPCEnv(gym.Env):
         job_sequence_size = JOB_SEQUENCE_SIZE
 
         self.pre_workloads = []
+        
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
 
         if self.build_sjf:
@@ -351,6 +383,7 @@ class HPCEnv(gym.Env):
         self.scheduled_scores = []
 
         job_sequence_size = num
+        print("debug! batch_job_slice = "+str(self.batch_job_slice)+", job_sequence_size = "+str(job_sequence_size))
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
         if self.batch_job_slice == 0:
             self.start = self.np_random.randint(job_sequence_size, (self.loads.size() - job_sequence_size - 1))
@@ -400,6 +433,7 @@ class HPCEnv(gym.Env):
                 break
 
         while not self.cluster.can_allocated(job):
+
             # try to backfill as many jobs as possible. Use FCFS
             self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             job_queue_iter_copy = list(self.job_queue)
@@ -678,6 +712,8 @@ class HPCEnv(gym.Env):
                 else:
                     can_schedule_now = 1e-5
 
+                #adding request time to job features
+
                 self.pairs.append([job,normalized_wait_time, normalized_run_time, normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now])
 
             elif self.skip and not add_skip:  # the next job is skip
@@ -695,7 +731,6 @@ class HPCEnv(gym.Env):
             #vector[:8]
 
             #seems like we are inputting each job into the vector list from 1->end, implying the job number isnt included
-
         return vector
 
     #@profile
@@ -707,21 +742,23 @@ class HPCEnv(gym.Env):
         # sort all running jobs by estimated finish time
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
+        #get amount of free processors currently on the cluster
         for running_job in self.running_jobs:
             #add count of allocated procs to free_proc count
             free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
             earliest_start_time = (running_job.scheduled_time + running_job.request_time) #maybe we need to modify this?
+            #get earliest start time of each job
             if free_processors >= job.request_number_of_processors:
                 break
-
+        #trying to get earliest_start_time
+        """if i am understanding this section correctly, we are looking for the first running job where upon its completion
+        we will have enough processors to run it, we then use that job as where we are backfilling relative to"""
         while not self.cluster.can_allocated(job):
             # try to backfill as many jobs as possible. Use FCFS
             self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             job_queue_iter_copy = list(self.job_queue)
             for _j in job_queue_iter_copy:
-                #
-                if self.cluster.can_allocated(_j) and (self.current_timestamp + _j.request_time) < earliest_start_time:
-                    # we should be OK to schedule the job now
+                if self.cluster.can_allocated(_j) and (self.current_timestamp + _j.request_time < earliest_start_time):
                     assert _j.scheduled_time == -1  # this job should never have been scheduled before.
                     _j.scheduled_time = self.current_timestamp
                     _j.allocated_machines = self.cluster.allocate(_j.job_id, _j.request_number_of_processors)
@@ -729,6 +766,7 @@ class HPCEnv(gym.Env):
                     score = self.job_score(_j)   # calculated reward
                     self.scheduled_rl[_j.job_id] = score
                     self.job_queue.remove(_j)  # remove the job from job queue
+            #^^^this is the loop where the jobs are backfilled, dont need to worry about other stuff below idt
 
             # move to the next timestamp
             assert self.running_jobs
@@ -899,14 +937,6 @@ class HPCEnv(gym.Env):
     def step(self, a):
         #observation, reward, done, etc
         job_for_scheduling = self.pairs[a][0]
-
-        if self.backfilling:
-            print("backfilling now!")
-            self.backfilling = False;
-        #backfilling loop
-        if self.first_step:
-            print("first step! skipping dummy action!")
-            self.first_step = False;
         if not job_for_scheduling:
             done, _ = self.skip_schedule()
         else:
@@ -955,29 +985,187 @@ class HPCEnv(gym.Env):
         
         #o, r, d, _
 
+# if __name__ == '__main__':
+#     import argparse
+
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')  # RICC-2010-2
+#     args = parser.parse_args()
+#     current_dir = os.getcwd()
+#     workload_file = os.path.join(current_dir, args.workload)
+
+#     env = HPCEnv(batch_job_slice=100, build_sjf=True)
+#     env.seed(0)
+#     env.my_init(workload_file=workload_file, sched_file=workload_file)
+def load_policy(model_path, itr='last'):
+    # handle which epoch to load from
+    if itr == 'last':
+        saves = [int(x[11:]) for x in os.listdir(model_path) if 'simple_save' in x and len(x) > 11]
+        itr = '%d' % max(saves) if len(saves) > 0 else ''
+    else:
+        itr = '%d' % itr
+
+    # load the things!
+    sess = tf.Session()
+    model = restore_tf_graph(sess, osp.join(model_path, 'simple_save' + itr))
+
+    # get the correct op for executing actions
+    pi = model['pi']
+    v = model['v']
+    out = model['out']
+    get_out = lambda x, y: sess.run(out, feed_dict={model['x']: x.reshape(-1, MAX_QUEUE_SIZE * JOB_FEATURES),
+                                                    model['mask']: y.reshape(-1, MAX_QUEUE_SIZE)})
+    # make function for producing an action given a single state
+    get_probs = lambda x, y: sess.run(pi, feed_dict={model['x']: x.reshape(-1, MAX_QUEUE_SIZE * JOB_FEATURES),
+                                                     model['mask']: y.reshape(-1, MAX_QUEUE_SIZE)})
+    get_v = lambda x: sess.run(v, feed_dict={model['x']: x.reshape(-1, MAX_QUEUE_SIZE * JOB_FEATURES)})
+    return get_probs, get_out
+
+
+def action_from_obs(o):
+    """return first job with lowest normalized_wait_time, effectively SJF"""
+    #observation = (job,normalized_wait_time, normalized_run_time, normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now)
+    #observation doesnt include job number, starts at normalized_wait_time
+    lst = []
+    for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
+        """The feature vector we recieve (documented above) is a list of features for each job = JOB_FEATURES, so we step through the list to check each job"""
+        lst.append((o[i + 1], math.floor(i / JOB_FEATURES)))
+        #append normalized wait time, job number
+    min_time = min([i[0] for i in lst])
+    #get lowest job wait time
+    result = [i[1] for i in lst if i[0] == min_time]
+    #get list of jobs with the lowest wait time
+    return result[0]
+    #return first job with lowest wait time
+
+
+# @profile
+def run_policy(env, get_probs, get_out, nums, iters, score_type):
+    rl_r = []
+    f1_r = []
+    f2_r = []
+    sjf_r = []
+    # small_r = []
+    wfp_r = []
+    uni_r = []
+    fcfs_r = []
+
+    # time_total = 0
+    # num_total = 0
+    for iter_num in range(0, iters):
+        start = iter_num * args.len
+        env.reset_for_test(nums, start)
+        f1_r.append(sum(env.schedule_curr_sequence_reset(env.f1_score).values()))
+        # f2_r.append(sum(env.schedule_curr_sequence_reset(env.f2_score).values()))
+        uni_r.append(sum(env.schedule_curr_sequence_reset(env.uni_score).values()))
+        wfp_r.append(sum(env.schedule_curr_sequence_reset(env.wfp_score).values()))
+
+        sjf_r.append(sum(env.schedule_curr_sequence_reset(env.sjf_score).values()))
+        # small_r.append(sum(env.schedule_curr_sequence_reset(env.smallest_score).values()))
+        fcfs_r.append(sum(env.schedule_curr_sequence_reset(env.fcfs_score).values()))
+
+        o = env.build_observation()
+        rl = 0
+        total_decisions = 0
+        rl_decisions = 0
+        while True:
+            count = 0
+            skip_ = []
+            lst = []
+            for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
+                if all(o[i:i + JOB_FEATURES] == [0] + [1] * (JOB_FEATURES - 2) + [0]):
+                    lst.append(0)
+                elif all(o[i:i + JOB_FEATURES] == [1] * JOB_FEATURES):
+                    lst.append(0)
+                else:
+                    count += 1
+                    if all(o[i:i + JOB_FEATURES] == [1] * (JOB_FEATURES - 1) + [0]):
+                        skip_.append(math.floor(i / JOB_FEATURES))
+                    lst.append(1)
+            # out = get_out(o, np.array(lst))
+            # softmax_out = tf.nn.softmax(out)
+            # confidence = tf.reduce_max(softmax_out)
+            # total_decisions += 1.0
+            # if confidence > 0:
+            #     #TODO: now that we know how it generates actions, we can figure out how to modify this to only pick jobs by SJF!
+            #     pi = get_probs(o, np.array(lst))
+            #     pi = tf.arg_max(softmax_out, dimension=1)
+            #     time_total += time.time() - start_time
+            #     num_total += 1
+            #     print(start_time, time_total, num_total)
+            #     a = pi[0]
+            #     rl_decisions += 1.0
+            # else:
+            #     print('SJF')
+            a = action_from_obs(o)
+            # v_t = get_value(o)
+
+            o, r, d, _ = env.step_for_test(a)
+            rl += r
+            if d:
+                # print("RL decision ratio:",rl_decisions/total_decisions)
+                break
+        rl_r.append(rl)
+
+    # plot
+    all_data = []
+    all_data.append(fcfs_r)
+    all_data.append(wfp_r)
+    all_data.append(uni_r)
+    all_data.append(sjf_r)
+    all_data.append(f1_r)
+    all_data.append(rl_r)
+    # all_data.append(fcfs_r)
+
+    all_medians = []
+    for p in all_data:
+        all_medians.append(np.median(p))
+    all_means = []
+    for p in all_data:
+        all_means.append(np.mean(p))
+    print(*all_means, sep=', ')
+
+
 if __name__ == '__main__':
     import argparse
+    import time
+
+    logLoss = []
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')  # RICC-2010-2
+    parser.add_argument('--rlmodel', type=str, default="./trained_models/bsld/sdsc_sp2/sdsc_sp2_s4")
+    parser.add_argument('--workload', type=str, default='./data/SDSC-SP2-1998-4.2-cln.swf')
+    parser.add_argument('--len', '-l', type=int, default=1024)
+    parser.add_argument('--seed', '-s', type=int, default=1)
+    parser.add_argument('--iter', '-i', type=int, default=5)
+    parser.add_argument('--shuffle', type=int, default=0)
+    parser.add_argument('--backfil', type=int, default=1)
+    parser.add_argument('--skip', type=int, default=0)
+    parser.add_argument('--score_type', type=int, default=0)
+    parser.add_argument('--batch_job_slice', type=int, default=10000)
+
     args = parser.parse_args()
+
     current_dir = os.getcwd()
     workload_file = os.path.join(current_dir, args.workload)
+    model_file = os.path.join(current_dir, args.rlmodel)
 
-    env = HPCEnv(batch_job_slice=100, build_sjf=True)
-    env.seed(0)
-    env.my_init(workload_file=workload_file, sched_file=workload_file)
+    get_probs, get_value = load_policy(model_file, 'last')
+
+    # initialize the environment from scratch
+    env = HPCEnv(shuffle=args.shuffle, backfil=args.backfil, skip=args.skip, job_score_type=args.score_type,
+                 batch_job_slice=args.batch_job_slice, build_sjf=False)
+    env.my_init(workload_file=workload_file)
+    env.seed(args.seed)
+
+    start = time.time()
+    run_policy(env, get_probs, get_value, args.len, args.iter, args.score_type)
+    print("elapse: {}".format(time.time() - start))
+    
+    # import pandas as pd
+    # df = pd.DataFrame (logLoss, columns = ['loss'])
+    # df.to_csv('lossLog.csv')
+    #logCSV(logLoss)
 
 
-    """Env.step plan!
-    1. Initially self.first_step = True and self.backfilling = False, this will let us skip the first action and have PPO run normally
-    2. self.backfilling is checked, on first run it will be False so nothing happens
-    3. env.step will check if first_step, if so, ignore action and run jobs, set self.first_step = False
-    4. jobs will be run by a modified schedule_curr_sequence_reset which will run jobs via sjf until we need to backfill
-    5. when a backfilling opportunity is found, self.backfilling is set to True, and an observation is returned
-    6. env.step() is exectued again with a valid action
-    7. self.backfilling is True, so we enter the backfilling function again
-    8. job is backfilled, if rjob still cant be allocated goto 5
-    9. if rjob can be allocated, advance time step and repeat goto4
-    10. If we run out jobs, return an observation with a done signal 
-    """
+    #make step, init function

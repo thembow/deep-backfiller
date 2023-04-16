@@ -452,13 +452,9 @@ class HPCEnv(gym.Env):
             raise NotImplementedError
     #@profile
     def schedule_curr_sequence_reset(self, score_fn):
+        #self.sjf_score
         # schedule the sequence of jobs using heuristic algorithm. 
         scheduled_logs = {}
-        # f = False
-        # if score_fn.__name__ == "sjf_score":
-        #     f = True
-        #     num_total = 0
-        # start_time = time.time()
         while True:
             self.job_queue.sort(key=lambda j: score_fn(j))
             job_for_scheduling = self.job_queue[0]
@@ -716,6 +712,7 @@ class HPCEnv(gym.Env):
             self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             job_queue_iter_copy = list(self.job_queue)
             for _j in job_queue_iter_copy:
+                #
                 if self.cluster.can_allocated(_j) and (self.current_timestamp + _j.request_time) < earliest_start_time:
                     # we should be OK to schedule the job now
                     assert _j.scheduled_time == -1  # this job should never have been scheduled before.

@@ -13,7 +13,8 @@ import logging
 logging.getLogger('tensorflow').disabled = True
 
 
-from HPCSimPickJobs import *
+# from HPCSimPickJobs import *
+from backfillGym import *
 
 tf.enable_eager_execution()
 
@@ -110,16 +111,16 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
             softmax_out = tf.nn.softmax(out)
             confidence = tf.reduce_max(softmax_out)
             total_decisions += 1.0
-            # if confidence > 0:
+            if confidence > 0:
             #     #TODO: now that we know how it generates actions, we can figure out how to modify this to only pick jobs by SJF!
             #     # start_time = time.time()
-            #     pi = get_probs(o, np.array(lst))
+                pi = get_probs(o, np.array(lst))
             #     # pi = tf.arg_max(softmax_out, dimension=1)
             #     # time_total += time.time() - start_time
             #     # num_total += 1
             #     # print(start_time, time_total, num_total)
-            #     a = pi[0]
-            #     rl_decisions += 1.0
+                a = pi[0]
+                rl_decisions += 1.0
             # else:
                 # print('SJF')
             a = action_from_obs(o)
@@ -127,7 +128,7 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
             # v_t = get_value(o)
 
 
-            o, r, d, _ = env.step_for_test(a)
+            o, r, d, _ = env.step_for_test(a) 
             rl += r
             if d:
                 # print("RL decision ratio:",rl_decisions/total_decisions)

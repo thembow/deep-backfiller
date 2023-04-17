@@ -9,7 +9,8 @@ from spinup.utils.mpi_tf import MpiAdamOptimizer, sync_all_params
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.utils.logx import restore_tf_graph
 import os.path as osp
-from HPCSimPickJobs import *
+#from HPCSimPickJobs import *
+from backfillGym import *
 def load_policy(model_path, itr='last'):
     # handle which epoch to load from
     if itr=='last':

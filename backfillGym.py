@@ -1283,7 +1283,7 @@ class HPCEnv(gym.Env):
                         self.rjob, self.scheduled_logs, job_for_scheduling)
             if not done:
                 obs = self.build_observation()
-                return [obs, 0, False, 0, 0, 0]
+                return [obs, 0, False]
             if done:
                 self.backfilling = False
         # backfilling loop
@@ -1302,14 +1302,13 @@ class HPCEnv(gym.Env):
         # else:
         #     job_for_scheduling = self.pairs[a][0]
         #     done = self.schedule(job_for_scheduling)
-
         if not done:
             obs = self.build_observation()
-            return [obs, 0, False, None]
+            return [obs, 0, False]
         else:
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
-            return [None, rl_total, True, None]
+            return [None, rl_total, True]
 
         # o, r, d, _
 

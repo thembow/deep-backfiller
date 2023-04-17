@@ -128,7 +128,7 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
             # v_t = get_value(o)
 
 
-            o, r, d, _ = env.step_for_test(a) 
+            o, r, d = env.step_for_test(a) 
             rl += r
             if d:
                 # print("RL decision ratio:",rl_decisions/total_decisions)

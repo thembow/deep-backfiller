@@ -307,6 +307,7 @@ class HPCEnv(gym.Env):
         self.running_jobs = []
         self.visible_jobs = []
         self.pairs = []
+        
         self.first_step = True
         self.backfilling = False
         self.rjob = 0
@@ -397,6 +398,10 @@ class HPCEnv(gym.Env):
         self.running_jobs = []
         self.visible_jobs = []
         self.pairs = []
+
+        self.first_step = True
+        self.backfilling = False
+        self.rjob = 0
 
         self.current_timestamp = 0
         self.start = 0
@@ -671,7 +676,7 @@ class HPCEnv(gym.Env):
             )
             self.running_jobs.append(job_for_scheduling)
             score = self.job_score(job_for_scheduling)  # calculated reward
-            self.scheduled_logs[job_for_scheduling.job_id] = score
+            self.scheduled_rl[job_for_scheduling.job_id] = score
             self.job_queue.remove(job_for_scheduling)
 
             not_empty = self.moveforward_for_job()
@@ -1232,6 +1237,7 @@ class HPCEnv(gym.Env):
 
     # @profile
     def step(self, a):
+        #TODO this was broken for ppopickjobs so i will need to rewrite at some point
         # observation, reward, done, etc
         job_for_scheduling = self.pairs[a][0]
 
@@ -1245,7 +1251,6 @@ class HPCEnv(gym.Env):
                 self.backfilling = False
         # backfilling loop
         if self.first_step:
-            print("first step! skipping dummy action!")
             self.first_step = False
         if not job_for_scheduling:
             done, _ = self.skip_schedule()
@@ -1288,7 +1293,6 @@ class HPCEnv(gym.Env):
                 self.backfilling = False
         # backfilling loop
         if self.first_step:
-            print("first step! skipping dummy action!")
             self.first_step = False
         if not job_for_scheduling:
             done, _ = self.skip_schedule()

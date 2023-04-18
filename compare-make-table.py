@@ -134,6 +134,7 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
                 # print("RL decision ratio:",rl_decisions/total_decisions)
                 break
         rl_r.append(rl)
+        print("current rl score: "+str(rl))
 
     # plot
     all_data = []

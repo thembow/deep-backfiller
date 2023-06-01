@@ -15,6 +15,7 @@ logging.getLogger('tensorflow').disabled = True
 
 # from HPCSimPickJobs import *
 from backfillGym import *
+#run correct environment for backfilling goal
 
 tf.enable_eager_execution()
 
@@ -46,8 +47,8 @@ def load_policy(model_path, itr='last'):
 
 def action_from_obs(o):
     """return first job with lowest normalized_wait_time, effectively SJF"""
-    #observation = (job,normalized_wait_time, normalized_run_time, normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now)
-    #observation doesnt include job number, starts at normalized_wait_time
+    #observation = (job,normalized_wait_time, normalized_run_time, normalized_request_nodes, , normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now)
+    #observation doesnt include job number, starts at normalized_wait_timenormalized_request_memory
     lst = []
     for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
         """The feature vector we recieve (documented above) is a list of features for each job = JOB_FEATURES, so we step through the list to check each job"""
@@ -76,7 +77,6 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
     # time_total = 0
     # num_total = 0
     for iter_num in range(0, iters):
-        print("debug! current iter =", iter_num)
         start = iter_num * args.len
         env.reset_for_test(nums, start)
         f1_r.append(sum(env.schedule_curr_sequence_reset(env.f1_score).values()))
@@ -121,20 +121,18 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
             #     # print(start_time, time_total, num_total)
                 a = pi[0]
                 rl_decisions += 1.0
-            # else:
+            else:
                 # print('SJF')
-            a = action_from_obs(o)
+                a = action_from_obs(o)
             # print(out)
             # v_t = get_value(o)
-
 
             o, r, d = env.step_for_test(a) 
             rl += r
             if d:
-                # print("RL decision ratio:",rl_decisions/total_decisions)
+                print("RL decision ratio:",rl_decisions,", ",total_decisions)
                 break
         rl_r.append(rl)
-        print("current rl score: "+str(rl))
 
     # plot
     all_data = []
@@ -161,7 +159,11 @@ if __name__ == '__main__':
     import time
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--rlmodel', type=str, default="./trained_models/bsld/sdsc_sp2/sdsc_sp2_s4")
+    parser.add_argument('--rlmodel', type=str, default="./data/logs/ppo/ppo_s0")
+    #parser.add_argument('--rlmodel', type=str, default="./data/logs/rlbf/rlbf_s0")
+    #parser.add_argument('--rlmodel', type=str, default="./data/logs/rlbf-epoch100/rlbf-epoch100_s0")
+    #parser.add_argument('--rlmodel', type=str, default="./data/logs/full-train/full-train_s0")
+    #parser.add_argument('--rlmodel', type=str, default="./trained_models/bsld/sdsc_sp2/sdsc_sp2_s4")
     parser.add_argument('--workload', type=str, default='./data/SDSC-SP2-1998-4.2-cln.swf')
     parser.add_argument('--len', '-l', type=int, default=1024)
     parser.add_argument('--seed', '-s', type=int, default=1)

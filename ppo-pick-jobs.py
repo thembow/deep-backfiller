@@ -468,7 +468,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')  # RICC-2010-2 lublin_256.swf SDSC-SP2-1998-4.2-cln.swf
-    parser.add_argument('--model', type=str, default='./data/lublin_256.schd')
+    parser.add_argument('--model', type=str, default='./data/lublin_256 .schd')
     parser.add_argument('--gamma', type=float, default=1)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)
@@ -476,10 +476,10 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=4000)
     parser.add_argument('--exp_name', type=str, default='ppo')
     parser.add_argument('--pre_trained', type=int, default=0)
-    parser.add_argument('--trained_model', type=str, default='./data/logs/ppo_temp/ppo_temp_s0')
+    parser.add_argument('--trained_model', type=str, default='./data/logs/ppo/ppo_s0')
     parser.add_argument('--attn', type=int, default=0)
     parser.add_argument('--shuffle', type=int, default=0)
-    parser.add_argument('--backfil', type=int, default=0)
+    parser.add_argument('--backfil', type=int, default=1)
     parser.add_argument('--skip', type=int, default=0)
     parser.add_argument('--score_type', type=int, default=0)
     parser.add_argument('--batch_job_slice', type=int, default=0)
@@ -500,7 +500,6 @@ if __name__ == '__main__':
         logger_kwargs=logger_kwargs, pre_trained=1,trained_model=os.path.join(model_file,"simple_save"),attn=args.attn,
             shuffle=args.shuffle, backfil=args.backfil, skip=args.skip, score_type=args.score_type,
             batch_job_slice=args.batch_job_slice)
-        #ppo seems important
     else:
         ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=0, attn=args.attn,shuffle=args.shuffle, backfil=args.backfil,
